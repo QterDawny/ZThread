@@ -1,10 +1,14 @@
 #include "zthreadpool.h"
-#include <stdio.h>
+
+class ThreadEntry {
+public:
+    QString name;
+    QThread *p;
+};
 
 ZThreadPool::ZThreadPool(QObject *parent) :
     QObject(parent)
 {
-
 }
 
 ZThreadPool::~ZThreadPool() {
@@ -13,24 +17,9 @@ ZThreadPool::~ZThreadPool() {
     }
 }
 
-void ZThreadPool::print() {
-#ifdef CMD_DEBUG
-    tMutex.lock();
-    printf("/-- threadpool --\n");
-    foreach(ThreadEntry *t, tList) {
-        printf("Thread '%s' -> %p\n", t->name.toLocal8Bit().data(), t->p);
-    }
-    printf("\\-- threadpool --\n");
-    tMutex.unlock();
-#endif
-}
-
-int ZThreadPool::size() {
-    int n = 0;
-    tMutex.lock();
-    n = tList.size();
-    tMutex.unlock();
-    return n;
+void ZThreadPool::registerThread(QThread *p, const QString &name) {
+    addThread(p, name);
+    connect(p, SIGNAL(finished()), SLOT(slot_checkAndRemove()));
 }
 
 void ZThreadPool::addThread(QThread *p, const QString &name) {
@@ -40,7 +29,6 @@ void ZThreadPool::addThread(QThread *p, const QString &name) {
     tMutex.lock();
     tList.append(t);
     tMutex.unlock();
-    print();
 }
 
 void ZThreadPool::removeThread(QThread *p) {
@@ -53,19 +41,21 @@ void ZThreadPool::removeThread(QThread *p) {
         }
     }
     if(tList.size() == 0) {
-        emit sigPoolEmpty();
+        emit signal_poolEmpty();
     }
     tMutex.unlock();
-    print();
+}
+
+int ZThreadPool::size() {
+    int n = 0;
+    tMutex.lock();
+    n = tList.size();
+    tMutex.unlock();
+    return n;
 }
 
 void ZThreadPool::slot_remove(QObject *obj) {
     removeThread((QThread *)obj);
-}
-
-void ZThreadPool::registerThread(QThread *p, const QString &name) {
-    addThread(p, name);
-    connect(p, SIGNAL(finished()), SLOT(slot_checkAndRemove()));
 }
 
 void ZThreadPool::slot_checkAndRemove() {
